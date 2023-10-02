@@ -2,12 +2,12 @@ import random
 from abc import ABCMeta, abstractmethod
 from math import floor
 from typing import List
-
+# hola
 import pandas as pd
 
 
 class Particion:
-    # Esta clase mantiene la lista de índices de Train y Test para cada partición del conjunto de particiones
+    # Esta clase mantiene la lista de ï¿½ndices de Train y Test para cada particiï¿½n del conjunto de particiones
     def __init__(self, indicesTrain: List[int] = [], indicesTest: List[int] = []):
         self.indicesTrain = indicesTrain
         self.indicesTest = indicesTest
@@ -41,7 +41,7 @@ class ValidacionSimple(EstrategiaParticionado):
         self.numeroEjecuciones = numeroEjecuciones
         self.proporcionTest = proporcionTest
 
-    # Crea particiones segun el metodo tradicional de division de los datos segun el porcentaje deseado y el número de ejecuciones deseado
+    # Crea particiones segun el metodo tradicional de division de los datos segun el porcentaje deseado y el nï¿½mero de ejecuciones deseado
     # Devuelve una lista de particiones (clase Particion)
     def creaParticiones(self, datos: pd.DataFrame, seed: int = 42) -> List[Particion]:
         n_filas = datos.shape[0]
@@ -52,7 +52,7 @@ class ValidacionSimple(EstrategiaParticionado):
         for _ in range(self.numeroEjecuciones):
             random.shuffle(indices)
 
-            # se calcula el número de ejemplos que se usarán como conjunto de prueba
+            # se calcula el nï¿½mero de ejemplos que se usarï¿½n como conjunto de prueba
             proporcion = floor(self.proporcionTest / 100 * n_filas)
 
             indices_train = indices[proporcion:]
