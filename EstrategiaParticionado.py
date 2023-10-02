@@ -2,7 +2,7 @@ import random
 from abc import ABCMeta, abstractmethod
 from math import floor
 from typing import List
-# hola
+
 import pandas as pd
 
 
