@@ -8,9 +8,9 @@ import pandas as pd
 
 class Particion:
     # Esta clase mantiene la lista de índices de Train y Test para cada partición del conjunto de particiones
-    def __init__(self):
-        self.indicesTrain = []
-        self.indicesTest = []
+    def __init__(self, indicesTrain: List[int] = [], indicesTest: List[int] = []):
+        self.indicesTrain = indicesTrain
+        self.indicesTest = indicesTest
 
 
 #####################################################################################################
@@ -52,11 +52,12 @@ class ValidacionSimple(EstrategiaParticionado):
         for _ in range(self.numeroEjecuciones):
             random.shuffle(indices)
 
+            # Se calcula el número de ejemplos que se usarán como conjunto de prueba proporcion = floor(self.proporcionTest / 100 * n_filas)
             proporcion = floor(self.proporcionTest / 100 * n_filas)
 
-            particion = Particion()
-            particion.indicesTrain = indices[proporcion:]
-            particion.indicesTest = indices[:proporcion]
+            particion = Particion(
+                indicesTrain=indices[proporcion:], indicesTest=indices[:proporcion]
+            )
 
             self.particiones.append(particion)
 
@@ -93,9 +94,7 @@ class ValidacionCruzada(EstrategiaParticionado):
                 indices[j] for j in range(n_filas) if j not in indices_test
             ]
 
-            particion = Particion()
-            particion.indicesTest = indices_test
-            particion.indicesTrain = indices_train
+            particion = Particion(indicesTrain=indices_train, indicesTest=indices_test)
 
             self.particiones.append(particion)
 
