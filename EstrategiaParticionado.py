@@ -52,12 +52,13 @@ class ValidacionSimple(EstrategiaParticionado):
         for _ in range(self.numeroEjecuciones):
             random.shuffle(indices)
 
-            # Se calcula el número de ejemplos que se usarán como conjunto de prueba proporcion = floor(self.proporcionTest / 100 * n_filas)
+            # se calcula el número de ejemplos que se usarán como conjunto de prueba
             proporcion = floor(self.proporcionTest / 100 * n_filas)
 
-            particion = Particion(
-                indicesTrain=indices[proporcion:], indicesTest=indices[:proporcion]
-            )
+            indices_train = indices[proporcion:]
+            indices_test = indices[:proporcion]
+
+            particion = Particion(indicesTrain=indices_train, indicesTest=indices_test)
 
             self.particiones.append(particion)
 
@@ -86,9 +87,19 @@ class ValidacionCruzada(EstrategiaParticionado):
         inicio = 0
 
         for i in range(self.numeroParticiones):
-            fin = inicio + longitud_fold + (1 if i < resto else 0)
+            fin = inicio + longitud_fold
+
+            # para las longitudes que no son divisibles enteramente por el numero
+            # de particiones los primeros folds tienen una longitud extra.
+            # e.g. datos = [1,2,3,4,5]; particiones = 3; folds = [[1,2], [3,4], [5]]
+            if i < resto:
+                fin += 1
+
             fin = min(fin, n_filas)
 
+            # se construyen los indices para las particiones.
+            # Los indices para training son todos aquellos que no pertenecen
+            # a los indices de testing
             indices_test = indices[inicio:fin]
             indices_train = [
                 indices[j] for j in range(n_filas) if j not in indices_test
