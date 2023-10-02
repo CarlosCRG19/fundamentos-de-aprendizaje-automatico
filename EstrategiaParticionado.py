@@ -11,6 +11,8 @@ class Particion:
     def __init__(self, indicesTrain: List[int] = [], indicesTest: List[int] = []):
         self.indicesTrain = indicesTrain
         self.indicesTest = indicesTest
+    def __str__(self):
+        return "indices train: " + self.indicesTrain + ". indices test: " + self.indicesTest
 
 
 #####################################################################################################
