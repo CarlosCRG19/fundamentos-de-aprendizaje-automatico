@@ -7,12 +7,13 @@ import pandas as pd
 
 
 class Particion:
-    # Esta clase mantiene la lista de �ndices de Train y Test para cada partici�n del conjunto de particiones
+    # Esta clase mantiene la lista de indices de Train y Test para cada particion del conjunto de particiones
     def __init__(self, indicesTrain: List[int] = [], indicesTest: List[int] = []):
         self.indicesTrain = indicesTrain
         self.indicesTest = indicesTest
+
     def __str__(self):
-        return "indices train: " + self.indicesTrain + ". indices test: " + self.indicesTest
+        return f"indices train: {self.indicesTrain}. indices test: {self.indicesTest}"
 
 
 #####################################################################################################
@@ -43,7 +44,7 @@ class ValidacionSimple(EstrategiaParticionado):
         self.numeroEjecuciones = numeroEjecuciones
         self.proporcionTest = proporcionTest
 
-    # Crea particiones segun el metodo tradicional de division de los datos segun el porcentaje deseado y el n�mero de ejecuciones deseado
+    # Crea particiones segun el metodo tradicional de division de los datos segun el porcentaje deseado y el numero de ejecuciones deseado
     # Devuelve una lista de particiones (clase Particion)
     def creaParticiones(self, datos: pd.DataFrame, seed: int = 42) -> List[Particion]:
         n_filas = datos.shape[0]
@@ -54,7 +55,7 @@ class ValidacionSimple(EstrategiaParticionado):
         for _ in range(self.numeroEjecuciones):
             random.shuffle(indices)
 
-            # se calcula el n�mero de ejemplos que se usar�n como conjunto de prueba
+            # se calcula el numero de ejemplos que se usaran como conjunto de prueba
             proporcion = floor(self.proporcionTest / 100 * n_filas)
 
             indices_train = indices[proporcion:]
@@ -70,6 +71,7 @@ class ValidacionSimple(EstrategiaParticionado):
 #####################################################################################################
 class ValidacionCruzada(EstrategiaParticionado):
     def __init__(self, numeroParticiones: int):
+        super().__init__()
         self.numeroParticiones = numeroParticiones
 
     # Crea particiones segun el metodo de validacion cruzada.
