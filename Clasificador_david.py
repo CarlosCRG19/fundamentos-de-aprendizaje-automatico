@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import GaussianNB
 from sklearn import metrics
+from sklearn.preprocessing import OneHotEncoder
 
 class Clasificador:
   
@@ -39,8 +40,8 @@ class Clasificador:
     
   # Realiza una clasificacion utilizando una estrategia de particionado determinada
   # TODO: implementar esta funcion
-  #def validacion(self,particionado,dataset,clasificador,seed=None):
-   # pass
+  def validacion(self,particionado,dataset,clasificador,seed=None):
+      pass
     # Creamos las particiones siguiendo la estrategia llamando a particionado.creaParticiones
     # - Para validacion cruzada: en el bucle hasta nv entrenamos el clasificador con la particion de train i
     # y obtenemos el error en la particion de test i
@@ -57,54 +58,51 @@ class Clasificador:
     #     entrenar sobre los datos de train
     #     obtener prediciones de los datos de test (llamando a clasifica)
     #     a�adir error de la partici�n al vector de errores
+import Datos
 
-class Datos:
-    def __init__(self, nombreFichero: str):
-        self.datosCrudos = pd.read_csv(nombreFichero)
-        self.datos = self.datosCrudos.copy()
+class ClasificadorNaiveBayes_heart(Clasificador):
+    def entrenamiento(self, datosTrain, nominalAtributos, diccionario):
 
-        self.nominalAtributos = []
-        self.diccionarios = {}
+        self.datos = Datos(datosTrain).datos
 
-        for columna in self.datos.columns:
-            if self._es_nominal(columna):
-                self.nominalAtributos.append(True)
-                self.diccionarios[columna] = self._generar_mapeo(columna)
-                self.datos[columna] = self._reemplazar_valores(columna)
-            elif self._es_numerico(columna):
-                self.nominalAtributos.append(False)
-                self.diccionarios[columna] = {}
-            else:
-                raise ValueError(
-                    f"La columna '{columna}' contiene valores que no son nominales ni enteros/decimales."
-                )
-    def _es_nominal(self, columna: str) -> bool:
-        # es verdadero si es la columna objetivo o si sus valores son nominales
-        return columna.lower() == "class" or self.datos[columna].dtype.name == "object"
+        encoder = OneHotEncoder(sparse=False, drop='first')  # 'first' um Dummy-Variablen-Falle zu vermeiden
+        self.datos = encoder.fit_transform(self.datos[nominalAtributos])
 
-    def _es_numerico(self, columna: str) -> bool:
-        # es verdadero si los valores son un n�meros enteros o reales
-        return self.datos[columna].dtype.name in ["int64", "float64"]
+        l_col = len(self.datos.columns) - 1
+        self.y = self.datos[self.datos.columns[l_col]]
+        self.X = self.datos.drop(self.datos.columns[l_col], axis=1)
 
-    def _generar_mapeo(self, columna_nominal: str):
-        # se extraen los valores �nicos de la columna y se sortean lexicograficamente
-        valores = [str(valor) for valor in self.datos[columna_nominal].unique()]
-        valores = sorted(valores)
-
-        return {valor: indice for indice, valor in enumerate(valores)}
-
-    def _reemplazar_valores(self, columna_nominal: str) -> pd.Series:
-        mapeo = self.diccionarios[columna_nominal]
-        return self.datos[columna_nominal].map(lambda valor: mapeo[str(valor)])
-
-    # Devuelve el subconjunto de los datos cuyos �ndices se pasan como argumento
-    def extraeDatos(self, idx: list[int]):
-        return self.datos.iloc[idx]
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y, test_size=0.2)
 
 
-class ClasificadorNaiveBayes:
+        return super().entrenamiento(datosTrain, nominalAtributos, diccionario)
+    
+    def clasifica(self, datosTest, nominalAtributos, diccionario):
+
+        self.GNB = GaussianNB()
+        self.GNB.fit(self.X_train, self.y_train)
+
+        return super().clasifica(datosTest, nominalAtributos, diccionario)
+    
+    def validacion(self, particionado, dataset, clasificador, seed=None):
+
+
+        return super().validacion(particionado, dataset, clasificador, seed)
+    
+    def error(self, datos, pred):
+
+
+        return super().error(datos, pred)
+
+
+
+
     def __init__(self, csv_file):
         self.datos = Datos(csv_file).datos
+        #nominals = Datos(csv_file).nominalAtributos
+        #encoder = OneHotEncoder(sparse=True, drop='first')
+        #self.datos = encoder.fit_transform(self.datos[nominals])
+
 
         l_col = len(self.datos.columns) - 1
         self.y = self.datos[self.datos.columns[l_col]]
@@ -121,6 +119,7 @@ class ClasificadorNaiveBayes:
         accuracy = metrics.accuracy_score(self.y_test, self.pred) * 100
         print("Accuracy %:", accuracy)
 
-# Beispiel der Verwendung der Klasse
-classifier = ClasificadorNaiveBayes("heart.csv")
+
+classifier = ClasificadorNaiveBayes_heart("heart.csv")
 classifier.calculate_accuracy()
+
