@@ -327,9 +327,13 @@ class ClasificadorNaiveBayes(Clasificador):
 
 ##############################################################################
 class ClasificadorNaiveBayesScikit:
-    def __init__(self, modelo: Union[CategoricalNB, GaussianNB, MultinomialNB]):
+    def __init__(
+        self,
+        modelo: Union[CategoricalNB, GaussianNB, MultinomialNB],
+        con_transformacion: bool = False,
+    ):
         self._modelo = modelo
-        self._codificador = OneHotEncoder()
+        self._con_transformacion = con_transformacion
 
     def entrenamiento(self, datosTrain, nominalAtributos, diccionario):
         """
@@ -345,21 +349,26 @@ class ClasificadorNaiveBayesScikit:
 
         # Codificacion de atributos nominales. Se utiliza One Hot Encoding,
         # para que no se interpreten las categorias como valores numericos sucesivos
-        columnas_atributos_nominales = [
-            columna for i, columna in enumerate(X.columns) if nominalAtributos[i]
-        ]
-        self._transformador = ColumnTransformer(
-            transformers=[("nominal", self._codificador, columnas_atributos_nominales)],
-            remainder="passthrough",  # columnas no nominales
-        )
-        X_codificado = self._transformador.fit_transform(X)
+        if self._con_transformacion:
+            codificador = OneHotEncoder()
+            columnas_atributos_nominales = [
+                columna for i, columna in enumerate(X.columns) if nominalAtributos[i]
+            ]
 
-        self._modelo.fit(X_codificado, y)
+            self._transformador = ColumnTransformer(
+                transformers=[("nominal", codificador, columnas_atributos_nominales)],
+                remainder="passthrough",  # columnas no nominales
+            )
+            X = self._transformador.fit_transform(X)
+
+        self._modelo.fit(X, y)
 
     def clasifica(self, datosTest, nominalAtributos, diccionario):
         X = datosTest.iloc[:, :-1]
-        # se utiliza el transformador ajustado con el dataset de entrenamiento
-        # para reemplazar las columnas categoricas
-        X_codificado = self._transformador.transform(X)
 
-        return self._modelo.predict(X_codificado)
+        if self._con_transformacion:
+            # se utiliza el transformador ajustado con el dataset de entrenamiento
+            # para reemplazar las columnas categoricas
+            X = self._transformador.transform(X)
+
+        return self._modelo.predict(X)
