@@ -3,6 +3,7 @@ from typing import Dict, List, NewType
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import accuracy_score
 
 PandasSeries = NewType("PandasSeries", pd.core.series.Series)
 
@@ -65,20 +66,34 @@ class Clasificador:
         pass
 
     # Obtiene el numero de aciertos y errores para calcular la tasa de fallo
-    # TODO: implementar
     def error(self, datos, pred):
         # Aqui se compara la prediccion (pred) con las clases reales y se calcula el error
-        pass
+        valores_reales = datos.iloc[:, -1]
+        1 - accuracy_score(valores_reales, pred)
 
     # Realiza una clasificacion utilizando una estrategia de particionado determinada
-    # TODO: implementar esta funcion
     def validacion(self, particionado, dataset, clasificador, seed=None):
         # Creamos las particiones siguiendo la estrategia llamando a particionado.creaParticiones
-        # - Para validacion cruzada: en el bucle hasta nv entrenamos el clasificador con la particion de train i
-        # y obtenemos el error en la particion de test i
-        # - Para validacion simple (hold-out): entrenamos el clasificador con la particion de train
-        # y obtenemos el error en la particion test. Otra opci�n es repetir la validaci�n simple un n�mero especificado de veces, obteniendo en cada una un error. Finalmente se calcular�a la media.
-        pass
+        particionado.creaParticiones(dataset.datos)
+
+        errores = []
+
+        for particion in particionado.particiones:
+            datos_test = dataset.extraeDatos(particion.indicesTest)
+            datos_train = dataset.extraeDatos(particion.indicesTrain)
+
+            clasificador.entrenamiento(
+                datos_train, dataset.nominalAtributos, dataset.diccionario
+            )
+
+            predicciones = clasificador.clasifica(
+                datos_test, dataset.nominalAtributos, dataset.diccionario
+            )
+
+            error = self.error(datos_test, predicciones)
+            errores.append(error)
+
+        return np.mean(errores)
 
 
 ##############################################################################
