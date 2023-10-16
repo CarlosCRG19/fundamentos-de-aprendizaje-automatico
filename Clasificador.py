@@ -1,70 +1,161 @@
-from abc import ABCMeta,abstractmethod
-import pandas
+from abc import ABCMeta, abstractmethod
+from typing import Dict, List, NewType
+
+import numpy as np
+import pandas as pd
+
+PandasSeries = NewType("PandasSeries", pd.core.series.Series)
+
+
+class CalculadoraProbabilidad:
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def calcula_para_valor(self, valor) -> float:
+        pass
+
+
+class ProbabilidadNominal(CalculadoraProbabilidad):
+    def __init__(self, valores_nominales: PandasSeries):
+        conteo_de_valores = valores_nominales.value_counts()
+        probabilidades = conteo_de_valores / len(valores_nominales)
+        self._probabilidades = probabilidades.to_dict()
+
+    def calcula_para_valor(self, valor) -> float:
+        if valor in self._probabilidades:
+            return self._probabilidades[valor]
+        else:
+            return 0
+
+
+class ProbabilidadGaussiana(CalculadoraProbabilidad):
+    def __init__(self, valores_numericos: PandasSeries):
+        self.media = valores_numericos.mean()
+        self.desviacion_estandar = valores_numericos.std()
+
+    def calcula_para_valor(self, valor) -> float:
+        if self.desviacion_estandar == 0:
+            return 1.0
+
+        exponente = -((valor - self.media) ** 2) / (2 * self.desviacion_estandar**2)
+        denominador = self.desviacion_estandar * np.sqrt(2 * np.pi)
+
+        return (1 / denominador) * np.exp(exponente)
+
 
 class Clasificador:
-  
-  # Clase abstracta
-  __metaclass__ = ABCMeta
-  
-  # Metodos abstractos que se implementan en casa clasificador concreto
-  @abstractmethod
-  # TODO: esta funcion debe ser implementada en cada clasificador concreto. Crea el modelo a partir de los datos de entrenamiento
-  # datosTrain: matriz numpy o dataframe con los datos de entrenamiento
-  # nominalAtributos: array bool con la indicatriz de los atributos nominales
-  # diccionario: array de diccionarios de la estructura Datos utilizados para la codificacion de variables discretas
-  def entrenamiento(self,datosTrain,nominalAtributos,diccionario):
-    pass
-  
-  
-  @abstractmethod
-  # TODO: esta funcion debe ser implementada en cada clasificador concreto. Devuelve un numpy array con las predicciones
-  # datosTest: matriz numpy o dataframe con los datos de validaci�n
-  # nominalAtributos: array bool con la indicatriz de los atributos nominales
-  # diccionario: array de diccionarios de la estructura Datos utilizados para la codificacion de variables discretas
-  # devuelve un numpy array o vector con las predicciones (clase estimada para cada fila de test)
-  def clasifica(self,datosTest,nominalAtributos,diccionario):
-    pass
-  
-  
-  # Obtiene el numero de aciertos y errores para calcular la tasa de fallo
-  # TODO: implementar
-  def error(self,datos,pred):
-    # Aqui se compara la prediccion (pred) con las clases reales y se calcula el error
-    # devuelve el error
-	  pass
-    
-    
-  # Realiza una clasificacion utilizando una estrategia de particionado determinada
-  # TODO: implementar esta funcion
-    def validacion(self,particionado,dataset,clasificador,seed=None):
-       
-    # Creamos las particiones siguiendo la estrategia llamando a particionado.creaParticiones
-    # - Para validacion cruzada: en el bucle hasta nv entrenamos el clasificador con la particion de train i
-    # y obtenemos el error en la particion de test i
-    # - Para validacion simple (hold-out): entrenamos el clasificador con la particion de train
-    # y obtenemos el error en la particion test. Otra opci�n es repetir la validaci�n simple un n�mero especificado de veces, obteniendo en cada una un error. Finalmente se calcular�a la media.
-    # devuelve el vector con los errores por cada partici�n
-    
-    # pasos
-    # crear particiones
-    # inicializar vector de errores
-    # for cada partici�n
-    #     obtener datos de train
-    #     obtener datos de test
-    #     entrenar sobre los datos de train
-    #     obtener prediciones de los datos de test (llamando a clasifica)
-    #     a�adir error de la partici�n al vector de errores
-	  pass  
+    # Clase abstracta
+    __metaclass__ = ABCMeta
+
+    # Metodos abstractos que se implementan en casa clasificador concreto
+    @abstractmethod
+    # TODO: esta funcion debe ser implementada en cada clasificador concreto. Crea el modelo a partir de los datos de entrenamiento
+    # datosTrain: matriz numpy con los datos de entrenamiento
+    # nominalAtributos: array bool con la indicatriz de los atributos nominales
+    # diccionario: array de diccionarios de la estructura Datos utilizados para la codificacion de variables discretas
+    def entrenamiento(self, datosTrain, nominalAtributos, diccionario):
+        pass
+
+    @abstractmethod
+    # TODO: esta funcion debe ser implementada en cada clasificador concreto. Devuelve un numpy array con las predicciones
+    # datosTest: matriz numpy con los datos de validaci�n
+    # nominalAtributos: array bool con la indicatriz de los atributos nominales
+    # diccionario: array de diccionarios de la estructura Datos utilizados para la codificacion de variables discretas
+    def clasifica(self, datosTest, nominalAtributos, diccionario):
+        pass
+
+    # Obtiene el numero de aciertos y errores para calcular la tasa de fallo
+    # TODO: implementar
+    def error(self, datos, pred):
+        # Aqui se compara la prediccion (pred) con las clases reales y se calcula el error
+        pass
+
+    # Realiza una clasificacion utilizando una estrategia de particionado determinada
+    # TODO: implementar esta funcion
+    def validacion(self, particionado, dataset, clasificador, seed=None):
+        # Creamos las particiones siguiendo la estrategia llamando a particionado.creaParticiones
+        # - Para validacion cruzada: en el bucle hasta nv entrenamos el clasificador con la particion de train i
+        # y obtenemos el error en la particion de test i
+        # - Para validacion simple (hold-out): entrenamos el clasificador con la particion de train
+        # y obtenemos el error en la particion test. Otra opci�n es repetir la validaci�n simple un n�mero especificado de veces, obteniendo en cada una un error. Finalmente se calcular�a la media.
+        pass
+
+
+##############################################################################
 
 
 class ClasificadorNaiveBayes(Clasificador):
-    
+    def entrenamiento(self, datosTrain, nominalAtributos, diccionario):
+        self._columnas_atributos = datosTrain.columns[:-1]
+        self._columna_clase = datosTrain.columns[-1]
 
+        self._a_priori = ProbabilidadNominal(datosTrain[self._columna_clase])
+        self._evidencias = self._inicializa_evidencias(datosTrain, nominalAtributos)
+        self._verosimilitudes = self._inicializa_verosimilitudes(
+            datosTrain, nominalAtributos
+        )
 
-    def calcula_a_priori(self, datos):
-        objetivo = datos.iloc[:,-1]
-        ocurrencias = objetivo.value_counts().to_dict()
+    def clasifica(self, datosTest, nominalAtributos, diccionario):
+        predicciones = []
 
-        a_priori = {valor: cuenta / objetivo.size for valor, cuenta in ocurrencias.items()}
-        
-        return a_priori
+        for _, fila in datosTest.iterrows():
+            probabilidades_posteriores = {}
+
+            for clase in datosTest[self._columna_clase].unique():
+                probabilidades_posteriores[
+                    clase
+                ] = self._calcula_probabilidad_a_posteriori(fila, clase)
+
+            clase_predicha = max(
+                probabilidades_posteriores, key=probabilidades_posteriores.get
+            )
+            predicciones.append(clase_predicha)
+
+        return np.array(predicciones)
+
+    def _inicializa_evidencias(
+        self, datos: pd.DataFrame, nominalAtributos: List[bool]
+    ) -> Dict[str, CalculadoraProbabilidad]:
+        evidencias = {}
+        atributos = datos.iloc[:, :-1]
+
+        for i, columna in enumerate(atributos.columns):
+            if nominalAtributos[i]:
+                evidencias[columna] = ProbabilidadNominal(atributos[columna])
+            else:
+                evidencias[columna] = ProbabilidadGaussiana(atributos[columna])
+
+        return evidencias
+
+    def _inicializa_verosimilitudes(
+        self, datos: pd.DataFrame, nominalAtributos: List[bool]
+    ) -> Dict[str, Dict[str, CalculadoraProbabilidad]]:
+        verosimilitudes = {atributo: {} for atributo in self._columnas_atributos}
+
+        for clase, datos_clase in datos.groupby(self._columna_clase):
+            for i, atributo in enumerate(self._columnas_atributos):
+                if nominalAtributos[i]:
+                    verosimilitudes[atributo][clase] = ProbabilidadNominal(
+                        datos_clase[atributo]
+                    )
+                else:
+                    verosimilitudes[atributo][clase] = ProbabilidadGaussiana(
+                        datos_clase[atributo]
+                    )
+
+        return verosimilitudes
+
+    def _calcula_probabilidad_a_posteriori(self, fila: PandasSeries, clase: int):
+        a_priori = self._a_priori.calcula_para_valor(clase)
+        evidencia = 1
+        verosimilitud = 1
+
+        for atributo in self._columnas_atributos:
+            valor_atributo = fila[atributo]
+
+            evidencia *= self._evidencias[atributo].calcula_para_valor(valor_atributo)
+            verosimilitud *= self._verosimilitudes[atributo][clase].calcula_para_valor(
+                valor_atributo
+            )
+
+        return (a_priori * verosimilitud) / evidencia
