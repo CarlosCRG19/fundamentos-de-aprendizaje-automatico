@@ -29,6 +29,20 @@ class ProbabilidadNominal(CalculadoraProbabilidad):
             return 0
 
 
+class ProbabilidadNominalConLaplace(CalculadoraProbabilidad):
+    def __init__(self, valores_nominales: PandasSeries, correccion=1):
+        self.conteo_de_valores = valores_nominales.value_counts()
+        self.n = len(valores_nominales)
+        self.k = len(self.conteo_de_valores)
+        self.correccion = 1
+
+    def calcula_para_valor(self, valor) -> float:
+        if valor in self.conteo_de_valores:
+            return (self.conteo_de_valores[valor] + self.correccion) / (self.n + self.k)
+        else:
+            return self.correccion / (self.n + self.k)
+
+
 class ProbabilidadGaussiana(CalculadoraProbabilidad):
     def __init__(self, valores_numericos: PandasSeries):
         self.media = valores_numericos.mean()
@@ -69,7 +83,7 @@ class Clasificador:
     def error(self, datos, pred):
         # Aqui se compara la prediccion (pred) con las clases reales y se calcula el error
         valores_reales = datos.iloc[:, -1]
-        1 - accuracy_score(valores_reales, pred)
+        return 1 - accuracy_score(valores_reales, pred)
 
     # Realiza una clasificacion utilizando una estrategia de particionado determinada
     def validacion(self, particionado, dataset, clasificador, seed=None):
@@ -83,28 +97,31 @@ class Clasificador:
             datos_train = dataset.extraeDatos(particion.indicesTrain)
 
             clasificador.entrenamiento(
-                datos_train, dataset.nominalAtributos, dataset.diccionario
+                datos_train, dataset.nominalAtributos, dataset.diccionarios
             )
 
             predicciones = clasificador.clasifica(
-                datos_test, dataset.nominalAtributos, dataset.diccionario
+                datos_test, dataset.nominalAtributos, dataset.diccionarios
             )
 
             error = self.error(datos_test, predicciones)
             errores.append(error)
 
-        return np.mean(errores)
+        return np.mean(errores), np.std(errores)
 
 
 ##############################################################################
 
 
 class ClasificadorNaiveBayes(Clasificador):
+    def __init__(self, con_laplace=False):
+        self.con_laplace = con_laplace
+
     def entrenamiento(self, datosTrain, nominalAtributos, diccionario):
         self._columnas_atributos = datosTrain.columns[:-1]
         self._columna_clase = datosTrain.columns[-1]
 
-        self._a_priori = ProbabilidadNominal(datosTrain[self._columna_clase])
+        self._a_priori = self._inicializa_a_priori(datosTrain)
         self._evidencias = self._inicializa_evidencias(datosTrain, nominalAtributos)
         self._verosimilitudes = self._inicializa_verosimilitudes(
             datosTrain, nominalAtributos
@@ -132,15 +149,19 @@ class ClasificadorNaiveBayes(Clasificador):
         self, datos: pd.DataFrame, nominalAtributos: List[bool]
     ) -> Dict[str, CalculadoraProbabilidad]:
         evidencias = {}
-        atributos = datos.iloc[:, :-1]
 
-        for i, columna in enumerate(atributos.columns):
-            if nominalAtributos[i]:
-                evidencias[columna] = ProbabilidadNominal(atributos[columna])
-            else:
-                evidencias[columna] = ProbabilidadGaussiana(atributos[columna])
+        for atributo in self._columnas_atributos:
+            evidencias[atributo] = self._crea_calculadora_probabilidad(
+                datos, atributo, nominalAtributos
+            )
 
         return evidencias
+
+    def _inicializa_a_priori(self, datos: pd.DataFrame):
+        if self.con_laplace:
+            return ProbabilidadNominalConLaplace(datos[self._columna_clase])
+        else:
+            return ProbabilidadNominal(datos[self._columna_clase])
 
     def _inicializa_verosimilitudes(
         self, datos: pd.DataFrame, nominalAtributos: List[bool]
@@ -148,15 +169,10 @@ class ClasificadorNaiveBayes(Clasificador):
         verosimilitudes = {atributo: {} for atributo in self._columnas_atributos}
 
         for clase, datos_clase in datos.groupby(self._columna_clase):
-            for i, atributo in enumerate(self._columnas_atributos):
-                if nominalAtributos[i]:
-                    verosimilitudes[atributo][clase] = ProbabilidadNominal(
-                        datos_clase[atributo]
-                    )
-                else:
-                    verosimilitudes[atributo][clase] = ProbabilidadGaussiana(
-                        datos_clase[atributo]
-                    )
+            for atributo in self._columnas_atributos:
+                verosimilitudes[atributo][clase] = self._crea_calculadora_probabilidad(
+                    datos_clase, atributo, nominalAtributos
+                )
 
         return verosimilitudes
 
@@ -174,3 +190,16 @@ class ClasificadorNaiveBayes(Clasificador):
             )
 
         return (a_priori * verosimilitud) / evidencia
+
+    def _crea_calculadora_probabilidad(self, datos, atributo, nominalAtributos):
+        if nominalAtributos[datos.columns.get_loc(atributo)]:
+            if self.con_laplace:
+                calculadora_probabilidad = ProbabilidadNominalConLaplace(
+                    datos[atributo]
+                )
+            else:
+                calculadora_probabilidad = ProbabilidadNominal(datos[atributo])
+        else:
+            calculadora_probabilidad = ProbabilidadGaussiana(datos[atributo])
+
+        return calculadora_probabilidad
