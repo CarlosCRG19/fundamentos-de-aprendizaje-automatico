@@ -1,9 +1,12 @@
 from abc import ABCMeta, abstractmethod
-from typing import Dict, List, NewType
+from typing import Dict, List, NewType, Union
 
 import numpy as np
 import pandas as pd
+from sklearn.compose import ColumnTransformer
 from sklearn.metrics import accuracy_score
+from sklearn.naive_bayes import CategoricalNB, GaussianNB, MultinomialNB
+from sklearn.preprocessing import OneHotEncoder
 
 # Tipo personalizado para Pandas Series
 PandasSeries = NewType("PandasSeries", pd.core.series.Series)
@@ -146,8 +149,6 @@ class Clasificador:
 
 
 ##############################################################################
-
-
 class ClasificadorNaiveBayes(Clasificador):
     def __init__(self, con_laplace=False):
         self.con_laplace = con_laplace
@@ -172,8 +173,10 @@ class ClasificadorNaiveBayes(Clasificador):
         predicciones = []
         clases = datosTest[self._columna_clase].unique()
 
+        X = datosTest.iloc[:, :-1]  # se remueve la ultima columna, "Clase"
+
         # para cada registro, se genera una prediccion
-        for _, fila in datosTest.iterrows():
+        for _, fila in X.iterrows():
             probabilidades_posteriores = {}
 
             for clase in clases:
@@ -320,3 +323,43 @@ class ClasificadorNaiveBayes(Clasificador):
             calculadora_probabilidad = ProbabilidadGaussiana(datos[atributo])
 
         return calculadora_probabilidad
+
+
+##############################################################################
+class ClasificadorNaiveBayesScikit:
+    def __init__(self, modelo: Union[CategoricalNB, GaussianNB, MultinomialNB]):
+        self._modelo = modelo
+        self._codificador = OneHotEncoder()
+
+    def entrenamiento(self, datosTrain, nominalAtributos, diccionario):
+        """
+        Entrena el clasificador Naive Bayes utilizando los datos de entrenamiento.
+
+        Args:
+            datosTrain (pd.DataFrame): El conjunto de datos de entrenamiento.
+            nominalAtributos (List[bool]): Lista de booleanos indicando si los atributos son nominales o no.
+            diccionario: No se utiliza en este método.
+        """
+        X = datosTrain.iloc[:, :-1]
+        y = datosTrain.iloc[:, -1]
+
+        # Codificacion de atributos nominales. Se utiliza One Hot Encoding,
+        # para que no se interpreten las categorias como valores numericos sucesivos
+        columnas_atributos_nominales = [
+            columna for i, columna in enumerate(X.columns) if nominalAtributos[i]
+        ]
+        self._transformador = ColumnTransformer(
+            transformers=[("nominal", self._codificador, columnas_atributos_nominales)],
+            remainder="passthrough",  # columnas no nominales
+        )
+        X_codificado = self._transformador.fit_transform(X)
+
+        self._modelo.fit(X_codificado, y)
+
+    def clasifica(self, datosTest, nominalAtributos, diccionario):
+        X = datosTest.iloc[:, :-1]
+        # se utiliza el transformador ajustado con el dataset de entrenamiento
+        # para reemplazar las columnas categoricas
+        X_codificado = self._transformador.transform(X)
+
+        return self._modelo.predict(X_codificado)
