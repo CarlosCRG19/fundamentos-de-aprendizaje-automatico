@@ -5,9 +5,15 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score
 
+# Tipo personalizado para Pandas Series
 PandasSeries = NewType("PandasSeries", pd.core.series.Series)
 
 
+##############################################################################
+
+
+# Clase auxiliar para calcular la probabilidad de un valor para un atributos
+# especifico del dataset
 class CalculadoraProbabilidad:
     __metaclass__ = ABCMeta
 
@@ -44,11 +50,17 @@ class ProbabilidadNominalConLaplace(CalculadoraProbabilidad):
 
 
 class ProbabilidadGaussiana(CalculadoraProbabilidad):
+    """
+    Calcula probabilidades para valores continuos siguiendo una distribución Gaussiana
+    """
+
     def __init__(self, valores_numericos: PandasSeries):
         self.media = valores_numericos.mean()
         self.desviacion_estandar = valores_numericos.std()
 
     def calcula_para_valor(self, valor) -> float:
+        # retorna un valor constante si la desviacion estandar es 0
+        # basicamente hace que se ignore la columna para el calculo de la prediccion
         if self.desviacion_estandar == 0:
             return 1.0
 
@@ -58,48 +70,71 @@ class ProbabilidadGaussiana(CalculadoraProbabilidad):
         return (1 / denominador) * np.exp(exponente)
 
 
+##############################################################################
+
+
 class Clasificador:
     # Clase abstracta
     __metaclass__ = ABCMeta
 
     # Metodos abstractos que se implementan en casa clasificador concreto
     @abstractmethod
-    # TODO: esta funcion debe ser implementada en cada clasificador concreto. Crea el modelo a partir de los datos de entrenamiento
-    # datosTrain: matriz numpy con los datos de entrenamiento
-    # nominalAtributos: array bool con la indicatriz de los atributos nominales
-    # diccionario: array de diccionarios de la estructura Datos utilizados para la codificacion de variables discretas
     def entrenamiento(self, datosTrain, nominalAtributos, diccionario):
+        """
+        Ajusta el modelo al conjunto de entrenamiento, generando los valores
+        necesarios para clasificar nuevos datos.
+
+        Argumentos:
+            - datosTrain: el conjunto de datos de entrenamiento
+            - nominalAtributos: array que indica si la columna en la posicion i es nominal o continua
+            - diccionario: valores de mapeo de las variables categoricas a numeros
+        """
         pass
 
     @abstractmethod
-    # TODO: esta funcion debe ser implementada en cada clasificador concreto. Devuelve un numpy array con las predicciones
-    # datosTest: matriz numpy con los datos de validaci�n
-    # nominalAtributos: array bool con la indicatriz de los atributos nominales
-    # diccionario: array de diccionarios de la estructura Datos utilizados para la codificacion de variables discretas
     def clasifica(self, datosTest, nominalAtributos, diccionario):
+        """
+        Utiliza el modelo ajustado para realizar predicciones sobre un nuevo conjunto
+        de datos.
+
+        Argumentos:
+            - datosTrain: el conjunto de datos de entrenamiento
+            - nominalAtributos: array que indica si la columna en la posicion i es nominal o continua
+            - diccionario: valores de mapeo de las variables categoricas a numeros
+
+        Retorna:
+            - una lista de longitud len(datosTest) con la prediccion de la clase de cada registro/fila
+        """
         pass
 
-    # Obtiene el numero de aciertos y errores para calcular la tasa de fallo
     def error(self, datos, pred):
+        """
+        Obtiene el numero de aciertos y errores para calcular la tasa de fallo
+        """
         # Aqui se compara la prediccion (pred) con las clases reales y se calcula el error
         valores_reales = datos.iloc[:, -1]
         return 1 - accuracy_score(valores_reales, pred)
 
-    # Realiza una clasificacion utilizando una estrategia de particionado determinada
     def validacion(self, particionado, dataset, clasificador, seed=None):
+        """
+        Realiza una clasificacion utilizando una estrategia de particionado determinada
+        """
+        errores = []
+
         # Creamos las particiones siguiendo la estrategia llamando a particionado.creaParticiones
         particionado.creaParticiones(dataset.datos)
-
-        errores = []
 
         for particion in particionado.particiones:
             datos_test = dataset.extraeDatos(particion.indicesTest)
             datos_train = dataset.extraeDatos(particion.indicesTrain)
 
+            # se llama al metodo del clasificador para ajustar el modelo al conjunto
+            # de entrenamiento
             clasificador.entrenamiento(
                 datos_train, dataset.nominalAtributos, dataset.diccionarios
             )
 
+            # obtenemos la lista de clases predichas para cada registro
             predicciones = clasificador.clasifica(
                 datos_test, dataset.nominalAtributos, dataset.diccionarios
             )
@@ -121,23 +156,32 @@ class ClasificadorNaiveBayes(Clasificador):
         self._columnas_atributos = datosTrain.columns[:-1]
         self._columna_clase = datosTrain.columns[-1]
 
-        self._a_priori = self._inicializa_a_priori(datosTrain)
-        self._evidencias = self._inicializa_evidencias(datosTrain, nominalAtributos)
+        # Estructuras de datos utilizadas en para las predicciones de nuevos conjuntos
+        # de datos. Se utilizan en la ecuación del teorema de Bayes
+        # P(y|x1,...,xj) = (P(x1,...,xj|y) * P(y)) / P(x1,...,xj)
+
+        self._a_priori = self._inicializa_a_priori(datosTrain)  # P(y)
+        self._evidencias = self._inicializa_evidencias(
+            datosTrain, nominalAtributos
+        )  # P(x1,...,xj)
         self._verosimilitudes = self._inicializa_verosimilitudes(
             datosTrain, nominalAtributos
-        )
+        )  # P(x1,...,xj | y)
 
     def clasifica(self, datosTest, nominalAtributos, diccionario):
         predicciones = []
+        clases = datosTest[self._columna_clase].unique()
 
+        # para cada registro, se genera una prediccion
         for _, fila in datosTest.iterrows():
             probabilidades_posteriores = {}
 
-            for clase in datosTest[self._columna_clase].unique():
+            for clase in clases:
                 probabilidades_posteriores[
                     clase
                 ] = self._calcula_probabilidad_a_posteriori(fila, clase)
 
+            # se toma la clase con la probabilidad más alta
             clase_predicha = max(
                 probabilidades_posteriores, key=probabilidades_posteriores.get
             )
@@ -148,6 +192,25 @@ class ClasificadorNaiveBayes(Clasificador):
     def _inicializa_evidencias(
         self, datos: pd.DataFrame, nominalAtributos: List[bool]
     ) -> Dict[str, CalculadoraProbabilidad]:
+        """
+        inicializa las estructuras de evidencia para cada atributo.
+        la evidencia representa la probabilidad de observar datos para un atributo
+        sin tener en cuenta una clase específica.
+
+        Argumentos:
+            - datos: el conjunto de datos de entrenamiento.
+            - nominalatributos: una lista que indica si la columna en la posición i es nominal o continua.
+
+        Retorna:
+            - un diccionario donde las claves son los atributos del conjunto de datos y los valores son
+              objetos que calculan la probabilidad de un valor para ese atributo.
+
+              e.g.
+                    {
+                      "AtributoA": CalculadoraProbabilidad(),
+                      "AtributoB": CalculadoraProbabilidad()
+                    }
+        """
         evidencias = {}
 
         for atributo in self._columnas_atributos:
@@ -158,6 +221,16 @@ class ClasificadorNaiveBayes(Clasificador):
         return evidencias
 
     def _inicializa_a_priori(self, datos: pd.DataFrame):
+        """
+        Inicializa un objeto que conoce las probabilidades de ocurrencia de cada clase.
+        Distingue si se debe de usar la correccion de Laplcase o no.
+
+        Argumentos:
+            - datos: El conjunto de datos de entrenamiento.
+
+        Retorna:
+            - un objeto que conoce las probabilidades de ocurrencia de cada clase.
+        """
         if self.con_laplace:
             return ProbabilidadNominalConLaplace(datos[self._columna_clase])
         else:
@@ -166,6 +239,32 @@ class ClasificadorNaiveBayes(Clasificador):
     def _inicializa_verosimilitudes(
         self, datos: pd.DataFrame, nominalAtributos: List[bool]
     ) -> Dict[str, Dict[str, CalculadoraProbabilidad]]:
+        """
+        inicializa las estructuras de verosimilitued para cada atributo y clase.
+        La verosimilitud (likelihood) representa la probabilidad de observar datos para un atributo
+        tomando en cuenta una clase específica.
+
+        Argumentos:
+            - datos: el conjunto de datos de entrenamiento.
+            - nominalatributos: una lista que indica si la columna en la posición i es nominal o continua.
+
+        Retorna:
+            - un diccionario multinivel donde las primeras claves son los atributos del conjunto de datos;
+              las del segundo, las clases posibles, y los valores son objetos que calculan
+              la probabilidad de un valor para ese atributo dada una clase.
+
+              e.g.
+                    {
+                      "AtributoA": {
+                          "ClaseX": CalculadoraProbabilidad(),
+                          "ClaseY": CalculadoraProbabilidad(),
+                      },
+                      "AtributoB": {
+                          "ClaseX": CalculadoraProbabilidad(),
+                          "ClaseY": CalculadoraProbabilidad(),
+                      }
+                    }
+        """
         verosimilitudes = {atributo: {} for atributo in self._columnas_atributos}
 
         for clase, datos_clase in datos.groupby(self._columna_clase):
@@ -184,15 +283,33 @@ class ClasificadorNaiveBayes(Clasificador):
         for atributo in self._columnas_atributos:
             valor_atributo = fila[atributo]
 
+            # Productorios
             evidencia *= self._evidencias[atributo].calcula_para_valor(valor_atributo)
             verosimilitud *= self._verosimilitudes[atributo][clase].calcula_para_valor(
                 valor_atributo
             )
 
+        # (P(x1,...,xj|y) * P(y)) / P(x1,...,xj)
         return (a_priori * verosimilitud) / evidencia
 
     def _crea_calculadora_probabilidad(self, datos, atributo, nominalAtributos):
-        if nominalAtributos[datos.columns.get_loc(atributo)]:
+        """
+        Método creacional de instancias de CalculadoraProbabilidad, dependiendo
+        del atributo que se quiere evaluar. Distingue si el atributo es nominal o numerico
+        y si se debe de usar la corrección de Laplace
+
+        Argumentos:
+            - datos: el conjunto de datos de entrenamiento.
+            - atributo: el nombre de un atributo en nuestro dataset.
+            - nominalatributos: una lista que indica si la columna en la posición i es nominal o continua.
+
+        Retorna:
+            - una instancia de una subclase de CalculadoraProbabilidad que conoce la probabilidad de un valor
+              para el atributo especificado
+        """
+        es_nominal = nominalAtributos[datos.columns.get_loc(atributo)]
+
+        if es_nominal:
             if self.con_laplace:
                 calculadora_probabilidad = ProbabilidadNominalConLaplace(
                     datos[atributo]
