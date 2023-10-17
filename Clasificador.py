@@ -125,7 +125,7 @@ class Clasificador:
         errores = []
 
         # Creamos las particiones siguiendo la estrategia llamando a particionado.creaParticiones
-        particionado.creaParticiones(dataset.datos)
+        particionado.creaParticiones(dataset.datos, seed=42)
 
         for particion in particionado.particiones:
             datos_test = dataset.extraeDatos(particion.indicesTest)
