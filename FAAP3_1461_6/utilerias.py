@@ -284,38 +284,18 @@ def obtener_puntos_ROC(scores_ordenados):
         tuple: Tupla con dos listas, una para las coordenadas X y otra para las coordenadas Y de la curva ROC.
     """
     Xs, Ys = [], []
-    x, y = 0, 0
+    tp, fp = 0, 0
 
-    for _, _, tp, fp in scores_ordenados:
-        if tp:
-            y += 1
-        elif fp:
-            x += 1
+    P = len([score for score in scores_ordenados if score[0] == 1])
+    N = len(scores_ordenados) - P
 
-        Xs.append(x)
-        Ys.append(y)
+    for _, _, _tp, _fp in scores_ordenados:
+        if _tp:
+            tp += 1
+        elif _fp:
+            fp += 1
 
-    return normaliza_puntos(Xs, Ys)
+        Xs.append(fp / N)
+        Ys.append(tp / P)
 
-
-def normaliza_puntos(Xs, Ys):
-    """
-    Normaliza las coordenadas X e Y de una curva ROC con base en el valor mas alto de las listas de entrada.
-
-    Args:
-        Xs (list): Lista de coordenadas X.
-        Ys (list): Lista de coordenadas Y.
-
-    Returns:
-        tuple: Tupla con dos listas normalizadas, una para las coordenadas X y otra para las coordenadas Y.
-    """
-    Xs_norm, Ys_norm = [], []
-
-    x_maximo = max(Xs)
-    y_maximo = max(Ys)
-
-    for x, y in zip(Xs, Ys):
-        Xs_norm.append(x / x_maximo)
-        Ys_norm.append(y / y_maximo)
-
-    return Xs_norm, Ys_norm
+    return Xs, Ys
