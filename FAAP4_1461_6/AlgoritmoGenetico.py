@@ -2,160 +2,13 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
+from CodificadorBinario import CodificadorBinario
+from EstrategiaCruce import EstrategiaCruce
+from EstrategiaMutacion import EstrategiaMutacion
+from Individuo import Individuo
+from Poblacion import Poblacion
 
 from Clasificador import Clasificador
-
-
-class Individuo:
-    def __init__(self, reglas: np.ndarray):
-        self.reglas = reglas
-
-    @staticmethod
-    def crea_con_reglas_aleatorias(max_reglas: int, longitud_reglas: int):
-        while True:
-            reglas = np.random.randint(
-                2, size=(np.random.randint(1, max_reglas), longitud_reglas)
-            )
-            # Verificar si alguna fila tiene solo 0s o solo 1s
-            if not np.any(np.all(reglas == 0, axis=1)) and not np.any(
-                np.all(reglas == 1, axis=1)
-            ):
-                break
-
-        return Individuo(reglas)
-
-    def clasifica_dato(self, dato: np.ndarray) -> int | None:
-        votos = [0, 0]
-
-        for regla in self.reglas:
-            regla_activada = True
-
-            for dato_bit, regla_bit in zip(dato[:-1], regla[:-1]):
-                if dato_bit == 1 and regla_bit != 1:
-                    regla_activada = False
-                    break
-
-            if regla_activada:
-                votos[regla[-1]] += 1
-
-        if sum(votos) == 0:
-            return None
-        elif votos[0] > votos[1]:
-            return 0
-        elif votos[0] < votos[1]:
-            return 1
-        else:
-            return -1
-
-    def fitness(self, datos_codificados: np.ndarray) -> float:
-        aciertos = 0
-
-        for dato in datos_codificados:
-            prediccion = self.clasifica_dato(dato)
-
-            if dato[-1] == prediccion:
-                aciertos += 1
-
-        return aciertos / datos_codificados.shape[0]
-
-    # metodo prototipo
-    def copia(self):
-        return Individuo(np.copy(self.reglas))
-
-
-class Poblacion:
-    def __init__(self, individuos: List[Individuo]):
-        self._individuos = individuos
-
-        self._promedio_fitness = -1
-        self._mejor_fitness = -1
-        self._mejor_individuo = None
-
-    def fitness(self, datos_codificados: np.ndarray) -> List[Tuple[Individuo, float]]:
-        fitness_poblacion = []
-        suma_fitness_poblacion = 0
-
-        mejor_fitness = -1
-        mejor_individuo = None
-
-        for individuo in self._individuos:
-            fitness_individuo = individuo.fitness(datos_codificados)
-
-            fitness_poblacion.append((individuo, fitness_individuo))
-            suma_fitness_poblacion += fitness_individuo
-
-            if fitness_individuo > mejor_fitness:
-                mejor_fitness = mejor_fitness
-                mejor_individuo = mejor_individuo
-
-        self._promedio_fitness = suma_fitness_poblacion / len(self._individuos)
-        self._mejor_fitness = mejor_fitness
-        self._mejor_individuo = mejor_individuo
-
-        return fitness_poblacion
-
-    def individuos(self) -> List[Individuo]:
-        return self._individuos
-
-    def mejor_individuo(self) -> Individuo:
-        return self._mejor_individuo
-
-    def mejor_fitness(self) -> float:
-        return self._mejor_fitness
-
-    def promedio_fitness(self) -> float:
-        return self._promedio_fitness
-
-
-# Revisar con el profesor si debemos de utilizar Datos
-
-
-class CodificadorBinario:
-    def __init__(self, datos: pd.DataFrame):
-        self._n_bits, self._codificacion = self._init_codificacion(datos)
-
-    def _init_codificacion(
-        self, datos: pd.DataFrame
-    ) -> Tuple[int, Dict[str, Dict[str, List[int]]]]:
-        atributos = datos.columns[:-1]
-        objetivo = datos.columns[-1]
-
-        codificacion = {}
-        n_bits = 0  # cantidad de bits necesarios para codificar una muestra
-
-        for atributo in atributos[:-1]:
-            valores = sorted(datos[atributo].astype(str).unique())
-            codificacion[atributo] = {}
-
-            for i, valor in enumerate(valores):
-                codigo = [0] * len(valores)
-                codigo[i] = 1
-
-                codificacion[atributo][valor] = codigo
-
-            n_bits += len(valores)
-
-        # Columna de clase, tiene una codificación con un solo bit
-        codificacion[objetivo] = {"0": [0], "1": [1]}
-        n_bits += 1
-
-        return n_bits, codificacion
-
-    def codifica_datos(self, datos: pd.DataFrame) -> np.ndarray:
-        filas_codificadas = []
-
-        for _, fila in datos.iterrows():
-            fila_codificada = []
-
-            for columna, valor in fila.items():
-                fila_codificada.extend(self._codificacion[columna][str(valor)])
-
-            filas_codificadas.append(fila_codificada)
-
-        return np.array(filas_codificadas)
-
-    def n_bits(self) -> int:
-        return self._n_bits
 
 
 class AlgoritmoGenetico(Clasificador):
@@ -165,14 +18,25 @@ class AlgoritmoGenetico(Clasificador):
         n_generaciones: int,
         max_reglas: int,
         porcentaje_elitismo: float,
+        probabilidad_mutacion: float,
+        cruces: List[EstrategiaCruce],
+        mutaciones: List[EstrategiaMutacion],
+        verbose: bool,
     ):
         self._max_reglas = max_reglas
         self._n_elitistas = int(np.ceil(tamano_poblacion * porcentaje_elitismo))
         self._n_generaciones = n_generaciones
         self._tamano_poblacion = tamano_poblacion
+        self._cruces = cruces
+        self._mutaciones = mutaciones
+        self._probabilidad_mutacion = probabilidad_mutacion
 
+        self._verbose = verbose
+
+        self._clase_mayoritaria = 1
         self._codificador = None
         self._generaciones = []
+        self._mejor_generacion = None
 
     def entrenamiento(
         self, datosTrain: pd.DataFrame, nominalAtributos: List[bool], diccionario: Dict
@@ -180,9 +44,11 @@ class AlgoritmoGenetico(Clasificador):
         # Crea codificacion -> esto podria ser a traves de diccionario
         self._codificador = CodificadorBinario(datosTrain)
 
+        datos_codificados = self._codificador.codifica_datos(datosTrain)
+
         # Crear primera generacion
         self._init_generaciones()
-        datos_codificados = self._codificador.codifica_datos(datosTrain)
+        self._init_clase_mayoritaria()
 
         for _ in range(self._n_generaciones):
             poblacion = self._generaciones[-1]
@@ -203,16 +69,15 @@ class AlgoritmoGenetico(Clasificador):
             nuevos_individuos = elite + descendientes
             nueva_poblacion = Poblacion(nuevos_individuos)
 
+            if self._verbose:
+                print(
+                    f"Nueva poblacion, mejor: {poblacion.mejor_fitness()}, promedio: {poblacion.promedio_fitness()}"
+                )
+
             self._generaciones.append(nueva_poblacion)
 
-        # seleccionar padres
-        # Crossovers => cruzar los padres
-        # Mutaciones => mutar los padres para generar descendientes
-        # Sobrevivientes => seleccionar solo los mejores descendientes
-        # actualizar poblacion
-
-        # calcular fitness de la poblacion final
-        # calcular mejor solucion (mejor individuo)
+        self._generaciones[-1].fitness(datos_codificados)
+        self._encuentra_mejor_generacion(datos_codificados)
 
     def _init_generaciones(self) -> Poblacion:
         individuos = []
@@ -227,6 +92,12 @@ class AlgoritmoGenetico(Clasificador):
             )
 
         self._generaciones.append(Poblacion(individuos))
+
+    def _init_clase_mayoritaria(self, datos_codificados: np.ndarray):
+        objetivo = datos_codificados[:, -1]
+        frecuencias = np.bincount(objetivo)
+
+        self._clase_mayoritaria = np.argmax(frecuencias)
 
     def _selecciona_elite(
         self, fitness_poblacion: List[Tuple[Individuo, float]]
@@ -269,52 +140,90 @@ class AlgoritmoGenetico(Clasificador):
         return progenitores
 
     def _operador_cruce(self, individuos: List[Individuo]) -> List[Individuo]:
-        # aplica cruce inter-reglas
-        descendientes = []
+        descendientes = individuos
 
-        for _ in range(len(individuos) // 2):
-            # Seleccionar dos progenitores aleatorios
-            progenitor1, progenitor2 = np.random.choice(
-                individuos, size=2, replace=False
+        for cruce in self._cruces:
+            descendientes = cruce.aplicar_cruce(
+                descendientes, max_reglas=self._max_reglas
             )
-
-            # Realizar el cruce inter-reglas
-            punto_cruce = np.random.randint(
-                min(len(progenitor1.reglas), len(progenitor2.reglas))
-            )
-
-            nueva_reglas1 = np.vstack(
-                (progenitor1.reglas[:punto_cruce], progenitor2.reglas[punto_cruce:])
-            )
-            nueva_reglas2 = np.vstack(
-                (progenitor2.reglas[:punto_cruce], progenitor1.reglas[punto_cruce:])
-            )
-
-            descendiente1 = Individuo(nueva_reglas1)
-            descendiente2 = Individuo(nueva_reglas2)
-
-            descendientes.extend([descendiente1, descendiente2])
 
         return descendientes
 
     def _operador_mutacion(self, individuos: List[Individuo]) -> List[Individuo]:
-        descendientes = []
+        descendientes = individuos
 
-        probabilidad_mutacion = 1 / (
-            self._tamano_poblacion * self._codificador.n_bits()
-        )
-
-        for individuo in individuos:
-            mutado = individuo.copia()
-            punto_mutacion = np.random.randint(len(mutado.reglas))
-
-            for i in range(len(mutado.reglas[punto_mutacion])):
-                if np.random.rand() < probabilidad_mutacion:
-                    mutado.reglas[punto_mutacion, i] ^= 1
-
-            descendientes.append(mutado)
+        for mutacion in self._mutaciones:
+            descendientes = mutacion.aplicar_mutacion(
+                descendientes, probabilidad_mutacion=self._probabilidad_mutacion
+            )
 
         return descendientes
 
-    def _representacion_condicional(self, individuo: Individuo):
-        pass
+    def _encuentra_mejor_generacion(self, datos_codificados: np.ndarray):
+        mejor_fitness = -1
+        mejor_generacion = None
+
+        for generacion in self._generaciones:
+            mejor_individuo = generacion.mejor_individuo()
+            fitness_individuo = mejor_individuo.fitness(datos_codificados)
+
+            if fitness_individuo > mejor_fitness:
+                mejor_fitness = fitness_individuo
+                mejor_generacion = generacion
+
+        self._mejor_generacion = mejor_generacion
+
+    def representacion_condicional(self, individuo: Individuo) -> List[str]:
+        reglas = individuo.reglas
+        representaciones = [
+            self._interpretar_regla(regla, self._codificador.codificacion())
+            for regla in reglas
+        ]
+
+        return representaciones
+
+    def _interpretar_regla(self, regla_binaria: List[int], codificacion) -> str:
+        output = "\nIF "
+        posicion_actual = 0
+
+        for atributo, valores in codificacion.items():
+            condiciones = [
+                f"({atributo} == {list(valores.keys())[i_bit]})"
+                for i_bit, bit in enumerate(
+                    regla_binaria[posicion_actual : posicion_actual + len(valores)]
+                )
+                if bit == 1
+            ]
+
+            if condiciones:
+                output += "\t AND " if output != "\nIF " else "\t"
+                output += " OR ".join(condiciones)
+                output += "\n"
+
+            posicion_actual += len(valores)
+
+        output += f"THEN Class == {regla_binaria[-1]}"
+
+        return output
+
+    def mejor_generacion(self):
+        return self._mejor_generacion
+
+    def clasifica(
+        self, datosTest: pd.DataFrame, nominalAtributos: List[bool], diccionario: Dict
+    ):
+        predicciones = []
+        datos_test_codificados = self._codificador.codifica_datos(datosTest)
+
+        X_test = datos_test_codificados[:, :-1]
+
+        for dato in X_test:
+            prediccion = self._mejor_generacion.mejor_individuo().clasifica(dato)
+
+            if prediccion == -1:
+                # el modelo no pudo decidir
+                prediccion = self._clase_mayoritaria
+
+            predicciones.append(prediccion)
+
+        return np.array(predicciones)
