@@ -35,10 +35,10 @@ class CruceInterReglas(EstrategiaCruce):
             )
 
             if nueva_reglas1.shape[0] > max_reglas:
-                nueva_reglas1[:max_reglas]
+                nueva_reglas1 = nueva_reglas1[:max_reglas]
 
             if nueva_reglas2.shape[0] > max_reglas:
-                nueva_reglas1[:max_reglas]
+                nueva_reglas2 = nueva_reglas2[:max_reglas]
 
             descendiente1 = Individuo(nueva_reglas1)
             descendiente2 = Individuo(nueva_reglas2)
@@ -46,7 +46,7 @@ class CruceInterReglas(EstrategiaCruce):
             descendientes.extend([descendiente1, descendiente2])
 
         if len(individuos) % 2 != 0:
-            descendientes.append(np.random.choice(individuos, size=1))
+            descendientes.append(np.random.choice(individuos))
 
         return descendientes
 
@@ -87,6 +87,6 @@ class CruceIntraReglas(EstrategiaCruce):
             descendientes.extend([descendiente1, descendiente2])
 
         if len(individuos) % 2 != 0:
-            descendientes.append(np.random.choice(individuos, size=1))
+            descendientes.append(np.random.choice(individuos))
 
         return descendientes

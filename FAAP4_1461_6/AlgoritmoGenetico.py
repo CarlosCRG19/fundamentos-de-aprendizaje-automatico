@@ -48,7 +48,7 @@ class AlgoritmoGenetico(Clasificador):
 
         # Crear primera generacion
         self._init_generaciones()
-        self._init_clase_mayoritaria()
+        self._init_clase_mayoritaria(datos_codificados)
 
         for _ in range(self._n_generaciones):
             poblacion = self._generaciones[-1]
@@ -183,7 +183,7 @@ class AlgoritmoGenetico(Clasificador):
         return representaciones
 
     def _interpretar_regla(self, regla_binaria: List[int], codificacion) -> str:
-        output = "\nIF "
+        output = "IF "
         posicion_actual = 0
 
         for atributo, valores in codificacion.items():
@@ -196,7 +196,7 @@ class AlgoritmoGenetico(Clasificador):
             ]
 
             if condiciones:
-                output += "\t AND " if output != "\nIF " else "\t"
+                output += "\t AND " if output != "IF " else "\t"
                 output += " OR ".join(condiciones)
                 output += "\n"
 
@@ -227,3 +227,6 @@ class AlgoritmoGenetico(Clasificador):
             predicciones.append(prediccion)
 
         return np.array(predicciones)
+
+    def generaciones(self) -> List[Poblacion]:
+        return self._generaciones
